@@ -182,6 +182,7 @@ fn determineDotnetValues(
         switch (libc_f) {
             .GNU => "glibc",
             .MUSL => "musl",
+            .DARWIN => "",
             else => return error.UnknownLibCFlavor,
         };
     const platform =
@@ -196,6 +197,7 @@ fn determineDotnetValues(
                 .aarch64 => "linux-musl-arm64",
                 else => return error.UnsupportedCpuArchitecture,
             },
+            .DARWIN => "macos",
             else => return error.UnknownLibCFlavor,
         };
     const coreclr_profiler_path = try std.fmt.allocPrintSentinel(gpa, "{s}/{s}/{s}/OpenTelemetry.AutoInstrumentation.Native.so", .{

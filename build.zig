@@ -8,14 +8,15 @@ const std = @import("std");
 // runner.
 pub fn build(b: *std.Build) !void {
     const optimize = std.builtin.OptimizeMode.ReleaseSafe;
-    const target_cpu = b.option(SupportedCpuArch, "cpu-arch", "The system architecture to compile the injector for; valid options are 'amd64' and 'arm64' (default)") orelse .arm64;
+    // const target_cpu = b.option(SupportedCpuArch, "cpu-arch", "The system architecture to compile the injector for; valid options are 'amd64' and 'arm64' (default)") orelse .arm64;
 
-    const target = b.resolveTargetQuery(.{
-        .cpu_arch = target_cpu.arch(),
-        // Skip cpu model detection because the automatic detection for transpiling fails in build
-        .cpu_model = .{ .explicit = target_cpu.model() },
-        .os_tag = .linux,
-    });
+    // const target = b.resolveTargetQuery(.{
+    //     .cpu_arch = target_cpu.arch(),
+    //     // Skip cpu model detection because the automatic detection for transpiling fails in build
+    //     .cpu_model = .{ .explicit = target_cpu.model() },
+    //     .os_tag = .macos,
+    // });
+    const target = b.standardTargetOptions(.{});
 
     // Creates a "module", which represents a collection of source files alongside
     // some compilation options, such as optimization mode and linked system libraries.
@@ -47,19 +48,19 @@ pub fn build(b: *std.Build) !void {
 
     b.getInstallStep().dependOn(&b.addInstallArtifact(lib, .{ .dest_dir = .{ .override = .{ .custom = "." } } }).step);
 
-    var copy_injector_to_bin = b.step("copy_file", "Copy injector file");
-    copy_injector_to_bin.makeFn = copyInjectorFile;
-
-    // make the copy step depend in the install step, which then makes it transitively depend on the compile step
-    copy_injector_to_bin.dependOn(b.getInstallStep());
-
-    // Make copying the injector shared library binary to its final location the default step. This wil also implictly
-    // trigger building the library as a dependent build step.
-    b.default_step = copy_injector_to_bin;
+    // var copy_injector_to_bin = b.step("copy_file", "Copy injector file");
+    // copy_injector_to_bin.makeFn = copyInjectorFile;
+    //
+    // // make the copy step depend in the install step, which then makes it transitively depend on the compile step
+    // copy_injector_to_bin.dependOn(b.getInstallStep());
+    //
+    // // Make copying the injector shared library binary to its final location the default step. This wil also implictly
+    // // trigger building the library as a dependent build step.
+    // b.default_step = copy_injector_to_bin;
 
     // TESTING
     const test_filters = b.option([][]const u8, "test-filter", "Match tests to execute");
-    const testTarget = b.standardTargetOptions(.{});
+    const testTarget = target; // b.standardTargetOptions(.{});
     const test_mod = b.createModule(.{
         .root_source_file = b.path("src/test.zig"),
         .target = testTarget,

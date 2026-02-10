@@ -53,10 +53,12 @@ fn initEnviron() callconv(.c) void {
         }
         return;
     };
-    defer allocator.free(libc_info.name);
+    // defer allocator.free(libc_info.name);
+
     print.printDebug("identified {s} libc loaded from {s}", .{ switch (libc_info.flavor) {
         types.LibCFlavor.GNU => "GNU",
         types.LibCFlavor.MUSL => "musl",
+        types.LibCFlavor.DARWIN => "darwin",
         else => "unknown",
     }, libc_info.name });
     dotnet.setLibcFlavor(libc_info.flavor);

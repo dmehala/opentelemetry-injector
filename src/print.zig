@@ -30,7 +30,50 @@ const proc_self_environ_path = "/proc/self/environ";
 /// injector's initialization phase yet, and we need to know the log level _before_ running libc.getLibCInfo() (or any
 /// other code that might want to print log messages).
 pub fn initLogLevelFromProcSelfEnviron() !void {
-    try initLogLevelFromEnvironFile(proc_self_environ_path);
+    switch (builtin.target.os.tag) {
+        .linux => try initLogLevelFromEnvironFile(proc_self_environ_path),
+        .macos => initLogLevelFromNS(),
+        else => error.OsNotSupported,
+    }
+}
+
+// TODO: Make a reader around `_NSGetEnviron` and return it
+// Resource: https://www.gnu.org/software/gnulib/manual/html_node/environ.html
+fn initLogLevelFromNS() void {
+    const c = @cImport({
+        @cInclude("crt_externs.h");
+    });
+
+    const environ_ptr = c._NSGetEnviron();
+    if (environ_ptr == null) {
+        printError("environ is null", .{});
+        return;
+    }
+
+    var i: usize = 0;
+    const environ = environ_ptr.*;
+    while (environ[i] != null) : (i += 1) {
+        const cstr = environ[i].?;
+        const slice = std.mem.span(cstr); // until '\0'
+        if (std.mem.startsWith(u8, slice, otel_injector_log_level_environ_prefix)) {
+            const log_level_value = slice[otel_injector_log_level_environ_prefix.len..];
+
+            if (std.ascii.eqlIgnoreCase("debug", log_level_value)) {
+                log_level = .Debug;
+            } else if (std.ascii.eqlIgnoreCase("info", log_level_value)) {
+                log_level = .Info;
+            } else if (std.ascii.eqlIgnoreCase("warn", log_level_value)) {
+                log_level = .Warn;
+            } else if (std.ascii.eqlIgnoreCase("error", log_level_value)) {
+                log_level = .Error;
+            } else if (std.ascii.eqlIgnoreCase("none", log_level_value)) {
+                log_level = .None;
+            } else {
+                printError("unknown value for OTEL_INJECTOR_LOG_LEVEL: \"{s}\" -- valid log levels are \"debug\", \"info\", \"warn\", \"error\", \"none\".", .{log_level_value});
+            }
+            printDebug("log level: {}", .{getLogLevel()});
+        }
+    }
 }
 
 // Note: initLogLevelFromEnvironFile is exposed as pub for testing purposes only.
@@ -39,7 +82,6 @@ pub fn initLogLevelFromEnvironFile(self_environ_path: []const u8) !void {
         .linux => @intCast(std.os.linux.getpid()),
         // Note: the injector does not support any OS besides Linux, this case is only here to support running Zig unit
         // tests directly on Darwin.
-        .macos => @intCast(std.c.getpid()),
         else => {
             error.OsNotSupported;
         },

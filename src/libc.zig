@@ -69,6 +69,49 @@ pub const DlsymLookupFn = *const fn (LibCNameAndFlavor, usize, usize) @typeInfo(
 ///    have to support the infinite number of corner cases of the various libc flavors and versions.
 /// 3. Use the loaded libc's `dlsym` function to look up the symbols we need (__environ, setenv).
 pub fn getLibCInfo(gpa: std.mem.Allocator) !types.LibCInfo {
+    switch (builtin.target.os.tag) {
+        .linux => return getLibCInfoLinux(gpa),
+        .macos => return getLibCInfoDarwin(),
+        else => return error.LibCError,
+    }
+}
+
+const clib = @cImport({
+    @cInclude("crt_externs.h");
+});
+
+// Use weak linkage.
+const setenv = @extern(
+    *const fn ([*:0]const u8, [*:0]const u8, c_int) callconv(.c) c_int,
+    .{ .name = "setenv", .linkage = .weak },
+);
+
+fn Setenv(
+    name: [*:0]const u8,
+    value: [*:0]const u8,
+    overwrite: bool,
+) c_int {
+    return setenv.?(
+        name,
+        value,
+        if (overwrite) 1 else 0,
+    );
+}
+
+fn getLibCInfoDarwin() !types.LibCInfo {
+    if (setenv == null) {
+        return error.LibCWeak;
+    }
+
+    return .{
+        .flavor = .DARWIN,
+        .name = "libSystem",
+        .environ_ptr = clib._NSGetEnviron(),
+        .setenv_fn_ptr = Setenv,
+    };
+}
+
+fn getLibCInfoLinux(gpa: std.mem.Allocator) !types.LibCInfo {
     const libc_name_and_flavor = try getLibCNameAndFlavor(gpa, proc_self_exe_path);
     const libc_info = getLibCMemoryLocations(
         proc_self_maps_path,
